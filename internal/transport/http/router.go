@@ -7,7 +7,9 @@ import (
 	"github.com/ParkPawapon/request-api/internal/infrastructure/cache"
 	"github.com/ParkPawapon/request-api/internal/infrastructure/database"
 	dbrepository "github.com/ParkPawapon/request-api/internal/infrastructure/database/repository"
+	apperrors "github.com/ParkPawapon/request-api/internal/pkg/errors"
 	"github.com/ParkPawapon/request-api/internal/transport/http/middleware"
+	"github.com/ParkPawapon/request-api/internal/transport/http/response"
 	v1health "github.com/ParkPawapon/request-api/internal/transport/http/v1/health"
 	v1petitiontypes "github.com/ParkPawapon/request-api/internal/transport/http/v1/petitiontypes"
 	petitiontypeusecase "github.com/ParkPawapon/request-api/internal/usecase/petitiontype"
@@ -43,6 +45,9 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 		middleware.Logger(deps.Logger),
 		middleware.Recovery(deps.Logger),
 	)
+	router.NoRoute(func(c *gin.Context) {
+		response.AppError(c, apperrors.NotFound("Not Found", nil))
+	})
 
 	healthHandler := v1health.NewHandler(v1health.Dependencies{
 		CheckDatabase: func(ctx context.Context) error {
