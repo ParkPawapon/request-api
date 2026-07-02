@@ -3,9 +3,10 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
-	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -42,9 +43,10 @@ type DatabaseConfig struct {
 }
 
 type RedisConfig struct {
-	Addr     string
-	Password string
-	DB       int
+	Addr      string
+	Password  string
+	DB        int
+	KeyPrefix string
 }
 
 type CORSConfig struct {
@@ -74,9 +76,10 @@ func Load() (*Config, error) {
 			ConnMaxLifetime: getDuration("DATABASE_CONN_MAX_LIFETIME", 30*time.Minute),
 		},
 		Redis: RedisConfig{
-			Addr:     getString("REDIS_ADDR", ""),
-			Password: getString("REDIS_PASSWORD", ""),
-			DB:       getInt("REDIS_DB", 0),
+			Addr:      getString("REDIS_ADDR", ""),
+			Password:  getString("REDIS_PASSWORD", ""),
+			DB:        getInt("REDIS_DB", 0),
+			KeyPrefix: getString("REDIS_KEY_PREFIX", "request-api"),
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: getCSV("CORS_ALLOWED_ORIGINS"),
@@ -106,6 +109,21 @@ func (c *Config) Validate() error {
 	if _, err := strconv.Atoi(c.App.Port); err != nil {
 		return fmt.Errorf("APP_PORT must be numeric")
 	}
+	if c.App.ReadTimeout <= 0 {
+		return fmt.Errorf("APP_READ_TIMEOUT must be greater than zero")
+	}
+	if c.App.WriteTimeout <= 0 {
+		return fmt.Errorf("APP_WRITE_TIMEOUT must be greater than zero")
+	}
+	if c.App.ShutdownTimeout <= 0 {
+		return fmt.Errorf("APP_SHUTDOWN_TIMEOUT must be greater than zero")
+	}
+	if c.App.RequestTimeout <= 0 {
+		return fmt.Errorf("APP_REQUEST_TIMEOUT must be greater than zero")
+	}
+	if c.App.MaxBodyBytes <= 0 {
+		return fmt.Errorf("APP_MAX_BODY_BYTES must be greater than zero")
+	}
 	if c.Database.URL == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
@@ -115,15 +133,37 @@ func (c *Config) Validate() error {
 	if c.Database.MaxIdleConns < 0 {
 		return fmt.Errorf("DATABASE_MAX_IDLE_CONNS must not be negative")
 	}
+	if c.Database.MaxIdleConns > c.Database.MaxOpenConns {
+		return fmt.Errorf("DATABASE_MAX_IDLE_CONNS must not exceed DATABASE_MAX_OPEN_CONNS")
+	}
+	if c.Database.ConnMaxLifetime <= 0 {
+		return fmt.Errorf("DATABASE_CONN_MAX_LIFETIME must be greater than zero")
+	}
 	if c.Redis.Addr == "" {
 		return fmt.Errorf("REDIS_ADDR is required")
 	}
 	if _, _, err := net.SplitHostPort(c.Redis.Addr); err != nil {
 		return fmt.Errorf("REDIS_ADDR must be host:port")
 	}
+	if c.Redis.DB < 0 {
+		return fmt.Errorf("REDIS_DB must not be negative")
+	}
+	if !isSafeKeyPrefix(c.Redis.KeyPrefix) {
+		return fmt.Errorf("REDIS_KEY_PREFIX must contain only letters, numbers, dot, colon, underscore, or hyphen")
+	}
+	if (c.App.Env == EnvProduction || c.App.Env == EnvStaging) && len(c.CORS.AllowedOrigins) == 0 {
+		return fmt.Errorf("CORS_ALLOWED_ORIGINS is required in staging and production")
+	}
 	for _, origin := range c.CORS.AllowedOrigins {
-		if !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+		parsed, err := url.Parse(origin)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("CORS_ALLOWED_ORIGINS must contain absolute http(s) origins")
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS must contain absolute http(s) origins")
+		}
+		if parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS must not contain path, query, or fragment")
 		}
 	}
 	return nil
@@ -136,4 +176,22 @@ func isAllowedEnv(env string) bool {
 	default:
 		return false
 	}
+}
+
+func isSafeKeyPrefix(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			continue
+		}
+		switch r {
+		case '.', ':', '_', '-':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
