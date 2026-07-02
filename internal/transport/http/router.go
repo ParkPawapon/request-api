@@ -6,8 +6,11 @@ import (
 	"github.com/ParkPawapon/request-api/internal/config"
 	"github.com/ParkPawapon/request-api/internal/infrastructure/cache"
 	"github.com/ParkPawapon/request-api/internal/infrastructure/database"
+	dbrepository "github.com/ParkPawapon/request-api/internal/infrastructure/database/repository"
 	"github.com/ParkPawapon/request-api/internal/transport/http/middleware"
 	v1health "github.com/ParkPawapon/request-api/internal/transport/http/v1/health"
+	v1petitiontypes "github.com/ParkPawapon/request-api/internal/transport/http/v1/petitiontypes"
+	petitiontypeusecase "github.com/ParkPawapon/request-api/internal/usecase/petitiontype"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -53,6 +56,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 
 	v1 := router.Group("/v1")
 	v1health.RegisterRoutes(v1, healthHandler)
+
+	petitionTypeRepository := dbrepository.NewPetitionTypeGormRepository(deps.DB)
+	petitionTypeUseCase := petitiontypeusecase.NewListPetitionTypesUseCase(petitionTypeRepository)
+	petitionTypeHandler := v1petitiontypes.NewHandler(petitionTypeUseCase)
+	v1petitiontypes.RegisterRoutes(v1, petitionTypeHandler)
 
 	return router
 }
