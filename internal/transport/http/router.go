@@ -1,0 +1,58 @@
+package httptransport
+
+import (
+	"context"
+
+	"github.com/ParkPawapon/request-api/internal/config"
+	"github.com/ParkPawapon/request-api/internal/infrastructure/cache"
+	"github.com/ParkPawapon/request-api/internal/infrastructure/database"
+	"github.com/ParkPawapon/request-api/internal/transport/http/middleware"
+	v1health "github.com/ParkPawapon/request-api/internal/transport/http/v1/health"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+type RouterDependencies struct {
+	Config *config.Config
+	DB     *gorm.DB
+	Logger *zap.Logger
+	Redis  *redis.Client
+}
+
+func NewRouter(deps RouterDependencies) *gin.Engine {
+	if deps.Config.App.Env == config.EnvProduction {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
+
+	router := gin.New()
+	router.MaxMultipartMemory = deps.Config.App.MaxBodyBytes
+
+	router.Use(
+		middleware.RequestID(),
+		middleware.SecurityHeaders(),
+		middleware.CORS(deps.Config.CORS.AllowedOrigins),
+		middleware.BodyLimit(deps.Config.App.MaxBodyBytes),
+		middleware.Timeout(deps.Config.App.RequestTimeout),
+		middleware.Logger(deps.Logger),
+		middleware.Recovery(deps.Logger),
+	)
+
+	healthHandler := v1health.NewHandler(v1health.Dependencies{
+		CheckDatabase: func(ctx context.Context) error {
+			return database.Ping(ctx, deps.DB)
+		},
+		CheckRedis: func(ctx context.Context) error {
+			return cache.Ping(ctx, deps.Redis)
+		},
+		Logger: deps.Logger,
+	})
+
+	v1 := router.Group("/v1")
+	v1health.RegisterRoutes(v1, healthHandler)
+
+	return router
+}
