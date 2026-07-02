@@ -89,6 +89,15 @@ Required runtime values:
 - `DATABASE_URL`
 - `REDIS_ADDR`
 
+Security-sensitive runtime rules:
+
+- timeouts and request body size must be greater than zero
+- database idle connections must not exceed open connections
+- Redis database index must not be negative
+- `REDIS_KEY_PREFIX` must use only letters, numbers, dot, colon, underscore, or hyphen
+- staging and production must provide an explicit CORS allowlist
+- CORS entries must be origins only, without path, query, or fragment
+
 Secrets must never be logged. `.env` files are ignored by git and only `.env.example` is committed.
 
 ## Logging Convention
@@ -113,7 +122,13 @@ Routes that had legacy `express-rate-limit` protection should register a route-l
 
 ## Redis Convention
 
-Redis is initialized from `REDIS_ADDR`, `REDIS_PASSWORD`, and `REDIS_DB`. The current foundation only provides client creation, ping readiness, and close behavior. No cache behavior is enabled yet, so existing business behavior is not changed.
+Redis is initialized from `REDIS_ADDR`, `REDIS_PASSWORD`, `REDIS_DB`, and `REDIS_KEY_PREFIX`. The current foundation only provides client creation, ping readiness, and close behavior. No cache behavior is enabled yet, so existing business behavior is not changed.
+
+Future cache helpers must apply `REDIS_KEY_PREFIX` before writing keys and must not cache sensitive data without a feature-specific security review.
+
+## Release Gate Convention
+
+Pull requests must pass local verification and the `Request API CI` workflow before merge. The workflow checks module tidiness, formatting, `go vet`, tests, and `go build ./cmd/api`. Security tools such as `govulncheck` and `gosec` should be added when the tools are installed and their runtime cost is acceptable.
 
 ## Testing Convention
 

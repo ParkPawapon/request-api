@@ -12,6 +12,7 @@ The current foundation:
 - does not drop tables
 - does not seed data
 - only opens PostgreSQL and performs readiness pings
+- validates connection pool values before startup
 
 ## Legacy Schema Source
 
@@ -81,11 +82,16 @@ Before adding Go models or repository implementations:
 
 - Never call `AutoMigrate` in application startup.
 - Never run schema-changing code from HTTP handlers.
+- Never run `DropTable`, `CreateTable`, `AlterColumn`, or seed code from default runtime.
 - Keep GORM models and DB-specific tags in infrastructure or persistence packages.
 - Use explicit table names when legacy names are quoted or mixed case.
 - Use transactions for multi-table petition and attachment writes.
 - Normalize DB errors before sending HTTP responses.
 - For `"petitionType"`, keep the GORM record model inside `internal/infrastructure/database/repository` and map out to the domain entity before returning to use cases.
+
+## Release Audit Evidence
+
+The production hardening gate records database safety status in `docs/qa/database-safety-report.md`. Each release must confirm that runtime code still avoids schema mutation and that any new repository maps legacy tables and columns explicitly.
 
 ## Migration Folder Policy
 
