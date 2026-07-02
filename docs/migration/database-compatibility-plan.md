@@ -33,6 +33,39 @@ Primary tables found:
 - `session`
 - `thesystem`
 
+## Migrated Table: `petitionType`
+
+Source:
+
+- `../request/backend/src/routes/petitionTypes.js`
+- `../request/migrations/20250122010000_init_schema.sql`
+
+Schema facts from source:
+
+| Column | Legacy SQL type | Nullability/default from source | Go mapping | Notes |
+| --- | --- | --- | --- | --- |
+| `"petitionTypeID"` | `integer` | `NOT NULL`, identity sequence added later | `int` | Primary key. |
+| `"petitionTypeName"` | `character varying` | nullable; unique constraint | `string` after `IS NOT NULL` filter | Route filters null names before mapping. |
+
+Constraints from source:
+
+- Primary key: `"petitionType_pkey"` on `"petitionTypeID"`
+- Unique key: `"petitionType_petitionTypeName_key"` on `"petitionTypeName"`
+- Identity sequence: `"petitionType_petitionTypeID_seq"` on `"petitionTypeID"`
+
+Runtime behavior for migrated route:
+
+- Read-only query.
+- Explicit table name: `"petitionType"` through `TableName()`.
+- Explicit column tags: `column:petitionTypeID`, `column:petitionTypeName`.
+- Filter: `"petitionTypeName" IS NOT NULL`.
+- Ordering: `"petitionTypeName" ASC`.
+- No soft delete behavior.
+- No timestamp behavior.
+- No pagination.
+- No transaction required.
+- No schema creation or alteration.
+
 ## Inspection Process Before Model Migration
 
 Before adding Go models or repository implementations:
@@ -52,6 +85,7 @@ Before adding Go models or repository implementations:
 - Use explicit table names when legacy names are quoted or mixed case.
 - Use transactions for multi-table petition and attachment writes.
 - Normalize DB errors before sending HTTP responses.
+- For `"petitionType"`, keep the GORM record model inside `internal/infrastructure/database/repository` and map out to the domain entity before returning to use cases.
 
 ## Migration Folder Policy
 

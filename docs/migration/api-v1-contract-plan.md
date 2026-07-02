@@ -17,7 +17,7 @@ The new API version boundary is `/v1`. Legacy routes under `/api/v1` and `/api` 
 | `/api/v1/auth/sso/debug` | `/v1/auth/sso/debug` | GET | None | HTML or JSON debug claims | SSO/session | Planned | Must remain disabled unless configured. |
 | `/api/v1/auth/me` | `/v1/auth/me` | GET | None | `CurrentUserResponse` | Session | Planned | Must match user/role shape from legacy. |
 | `/api/v1/auth/logout` | `/v1/auth/logout` | POST | None | `LogoutResponse` | Session/CSRF | Planned | Must clear same cookie/session state as legacy. |
-| `/api/v1/petition-types` | `/v1/petition-types` | GET | None | `PetitionTypesResponse` | Verify | Planned | Read from legacy `petitionType` table. |
+| `/api/v1/petition-types` | `/v1/petition-types` | GET | None | `PetitionTypesResponse` | No | Implemented | Reads from legacy `"petitionType"` table, filters null names, orders by name ascending, and returns the legacy item shape inside the normalized envelope. |
 | `/api/v1/petitions/my` | `/v1/petitions/my` | GET | Query params | `PetitionListResponse` | User | Planned | Must preserve filtering and paging behavior. |
 | `/api/v1/petitions` | `/v1/petitions` | POST | `CreatePetitionRequest` multipart | `PetitionResponse` | User | Planned | Requires upload adapter and DB transaction design. |
 | `/api/v1/petitions/:id` | `/v1/petitions/:id` | GET | Path param | `PetitionResponse` | User | Planned | Must enforce submitter visibility. |
@@ -38,3 +38,14 @@ The new API version boundary is `/v1`. Legacy routes under `/api/v1` and `/api` 
 - Response envelopes must go through `internal/transport/http/response`.
 - Errors must use `internal/pkg/errors`.
 - Production routes must not fake success when dependencies are not implemented.
+
+## Detailed Contract Matrix
+
+| Legacy route | Legacy method | Legacy controller/source file | New `/v1` route | New handler location | Usecase location | Repository interface | DB tables touched | Request DTO | Response DTO | Auth required | Permission required | Validation rules | Status code mapping | Migration status | Test coverage status | Notes/blockers |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/api/v1/healthz` | GET | `../request/backend/src/app.js` | `/v1/health` | `internal/transport/http/v1/health` | N/A | N/A | PostgreSQL ping, Redis ping | None | `health.Status` | No | None | None | `200` ready, `503` not ready | Implemented foundation | Handler tests | Upload/session readiness from legacy is not migrated yet. |
+| `/api/v1/livez` | GET | `../request/backend/src/app.js` | `/v1/health/live` | `internal/transport/http/v1/health` | N/A | N/A | None | None | `health.Status` | No | None | None | `200` live | Implemented foundation | Handler tests | Process liveness only. |
+| `/api/v1/readyz` | GET | `../request/backend/src/app.js` | `/v1/health/ready` | `internal/transport/http/v1/health` | N/A | N/A | PostgreSQL ping, Redis ping | None | `health.Status` | No | None | None | `200` ready, `503` not ready | Implemented foundation | Handler tests | Upload/session readiness from legacy is not migrated yet. |
+| `/api/v1/petition-types` | GET | `../request/backend/src/routes/petitionTypes.js` | `/v1/petition-types` | `internal/transport/http/v1/petitiontypes` | `internal/usecase/petitiontype` | `internal/repository.PetitionTypeRepository` | `"petitionType"` read-only | None | `[]PetitionTypeResponse` with `petitionTypeID`, `petitionTypeName` | No | None | No request body/query params; DB query filters `"petitionTypeName" IS NOT NULL` | `200` success with data array, `429` rate limited, `500` safe internal error | Implemented | Handler, usecase, rate-limit tests | New API uses normalized envelope while preserving legacy `data` item shape. |
+| `/api/v1/auth/me` | GET | `../request/backend/src/routes/auth.js` | `/v1/auth/me` | Planned | Planned | Planned | `session`, user tables | None | `CurrentUserResponse` | Session | Current user | Session cookie required | `200`, `401` | Planned | Not covered | Blocked on session/SSO migration strategy. |
+| `/api/v1/petitions/my` | GET | `../request/backend/src/routes/petitions.js` | `/v1/petitions/my` | Planned | Planned | Planned | `"petition"`, `"petitionSubmitter"`, `"petitionType"`, `"petitionAttachment"` | Query params | `PetitionListResponse` | User | Submitter access | Query validation with paging/filter/sort parity | `200`, `400`, `401`, `500` | Planned | Not covered | Requires auth/session migration first. |

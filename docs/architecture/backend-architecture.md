@@ -101,6 +101,16 @@ PostgreSQL is accessed through GORM at the infrastructure boundary. The foundati
 
 Repository implementations must keep GORM models inside infrastructure packages or tightly scoped adapters. Use cases should depend on repository interfaces, not `*gorm.DB`.
 
+The first migrated business route, `GET /v1/petition-types`, follows this boundary:
+
+`transport/http/v1/petitiontypes` -> `usecase/petitiontype` -> `repository.PetitionTypeRepository` -> `infrastructure/database/repository.PetitionTypeGormRepository`.
+
+The GORM record type is private to the infrastructure repository and maps the legacy `"petitionType"` table explicitly before returning a domain entity.
+
+## Rate Limit Convention
+
+Routes that had legacy `express-rate-limit` protection should register a route-level limiter in HTTP transport. `GET /v1/petition-types` uses an in-memory 60 requests/minute limiter to match the legacy default memory-store behavior without adding cache semantics that legacy did not have.
+
 ## Redis Convention
 
 Redis is initialized from `REDIS_ADDR`, `REDIS_PASSWORD`, and `REDIS_DB`. The current foundation only provides client creation, ping readiness, and close behavior. No cache behavior is enabled yet, so existing business behavior is not changed.
