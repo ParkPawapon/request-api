@@ -96,6 +96,36 @@ This inventory was created from read-only inspection of `../request/backend` and
 - route-level rate limiters in auth, petitions, and staff routes
 - multer upload handling for petition attachments
 
+## Migrated Slice Inventory
+
+### Petition Types
+
+- Legacy source: `../request/backend/src/routes/petitionTypes.js`
+- Legacy route: `GET /api/v1/petition-types` and `GET /api/petition-types`
+- New route: `GET /v1/petition-types`
+- Auth: none in legacy route
+- Rate limit: `express-rate-limit`, 60 requests per minute per IP, standard rate limit headers enabled
+- Query:
+
+```sql
+SELECT
+  "petitionTypeID"   AS "petitionTypeID",
+  "petitionTypeName" AS "petitionTypeName"
+FROM "petitionType"
+WHERE "petitionTypeName" IS NOT NULL
+ORDER BY "petitionTypeName" ASC
+```
+
+- Legacy success response: `200` with `{ "data": [{ "petitionTypeID": 1, "petitionTypeName": "..." }] }`
+- New success response: `200` normalized envelope with `data` containing the same item shape
+- Empty state: `data: []`
+- Error behavior: legacy forwards DB errors to the app error handler, which returns `500 { "error": "Internal Server Error" }`; Go maps repository errors to `500` normalized `INTERNAL`
+- DB table touched: `"petitionType"` read-only
+- Validation: none; no request body or query parameters
+- Side effects: none
+- Migration status: implemented
+- Test coverage: handler success, handler internal error normalization, usecase repository error mapping, route-level rate limit
+
 ## Database Usage Inventory
 
 Legacy DB access uses `pg.Pool` and repository/service functions. The initial schema migration defines these tables:
@@ -114,6 +144,8 @@ Legacy DB access uses `pg.Pool` and repository/service functions. The initial sc
 
 The legacy server may create the `session` table through `connect-pg-simple` when `SESSION_TABLE_CREATE=true`. The Go service must not create or alter tables by default.
 
+For the migrated `petition-types` route, the only table accessed is `"petitionType"`. It is read-only and uses the legacy ordering by `"petitionTypeName" ASC` while filtering out null names.
+
 ## Auth and Session Inventory
 
 - Primary auth state is Express session cookie, default name `sid`.
@@ -129,6 +161,23 @@ The legacy server may create the `session` table through `connect-pg-simple` whe
 - Petition routes use route-level validation and service-level checks.
 - SSO config uses explicit parsing and normalization.
 - Upload validation includes root path containment and file type/size handling.
+- `GET /petition-types` has no request DTO, no query params, and no validation rules.
+
+## Error and Response Inventory
+
+- Health endpoints return direct JSON status objects in legacy; Go health endpoints use normalized envelopes.
+- `GET /petition-types` legacy success body is `{ data: rows || [] }`; Go preserves the `data` array but wraps it in the API envelope with `ok: true`.
+- Legacy uncaught route errors are normalized by the Express app error handler to `500 { error: "Internal Server Error" }`; Go maps internal errors to `500` with code `INTERNAL` and safe message `Internal Server Error`.
+- Legacy 404 for API paths returns `{ error: "Not Found" }`; Go route coverage is currently limited to migrated `/v1` endpoints.
+
+## Cache Inventory
+
+- No Redis/cache usage was found for `GET /petition-types`.
+- Redis exists in the Go foundation for readiness and future cache adapters, but no cache has been added to this migrated route to avoid changing data freshness behavior.
+
+## Background Job Inventory
+
+- No cron/background job behavior was found for `GET /petition-types`.
 
 ## Environment Inventory
 
