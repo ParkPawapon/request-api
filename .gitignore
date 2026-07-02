@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+/bin/
+/api
+/dist/
+/coverage/
+/tmp/
+/.tmp/
+
+*.log
+*.out
+*.test
